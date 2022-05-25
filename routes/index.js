@@ -6,6 +6,21 @@ const Stripe = require("stripe")(
 );
 var dbcon = require("./connection_config");
 /* GET home page. */
+
+var nodemailer = require("nodemailer");
+
+var transporter = nodemailer.createTransport({
+  service: "gmail",
+  port: 465,
+  auth: {
+    user: "0938224718nguyen@gmail.com",
+    pass: "0938224718",
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
 router.get("/", function (req, res, next) {
   res.render("index", { title: "Express" });
 });
@@ -117,6 +132,15 @@ router.get("/sophong/:id", (req, res) => {
     }
   );
 });
+router.get("/hoadon", (req, res) => {
+  dbcon.query(
+    "SELECT * FROM cnpm.HOA_DON where ID_USER='CUS1' And HD_STATUS=1 ",
+    function (err, result, filesd) {
+      if (err) throw console.log(err);
+      res.json(result);
+    }
+  );
+});
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 router.post("/sophong-add", (req, res) => {
   dbcon.query(
@@ -156,8 +180,18 @@ router.get("/refund", async (req, res) => {
 });
 router.post("/payment", async (req, res) => {
   let status, error;
-  const { token, amount } = req.body;
-  console.log(amount);
+  console.log("run");
+  const {
+    token,
+    amount,
+    roomid,
+    datetime,
+    ngaynhan,
+    ngaytra,
+    totalprice,
+    lastprice,
+  } = req.body;
+  console.log(datetime);
   try {
     await Stripe.charges
       .create({
@@ -166,9 +200,48 @@ router.post("/payment", async (req, res) => {
         currency: "usd",
       })
       .then((charge) => {
-        res.status(200).send(charge);
+        dbcon.query(
+          "INSERT INTO cnpm.HOA_DON (ID_HOA_DON,ID_USER ,ID_ROOMTYPE, PAY_TIME, SO_LUONG_PHONG, NGAY_NHAN_PHONG,NGAY_TRA_PHONG ,BOOK_TYPE,  TOTAL_PRICE , FINAL_PRICE,HD_STATUS )VALUES ('" +
+            token.id +
+            "','CUS1','" +
+            roomid +
+            "', '" +
+            datetime +
+            "',1, '" +
+            ngaynhan +
+            "','" +
+            ngaytra +
+            "' ,0," +
+            totalprice +
+            "," +
+            lastprice +
+            ",1);",
+          function (err, result, filesd) {
+            if (err) throw console.log(err);
+            var mailOptions = {
+              from: "0938224718nguyen@gmail.com",
+              to: "01675359367nguyen@gmail.com",
+              subject: "Hóa Đơn Điện Tử",
+              text:
+                "Ngày nhận phòng:+" +
+                ngaynhan +
+                " Ngày trả phòng:" +
+                ngaytra +
+                " Số tiền thanh toán:" +
+                lastprice,
+            };
+
+            transporter.sendMail(mailOptions, function (error, info) {
+              if (error) {
+                console.log(error);
+              } else {
+                console.log("Email sent: " + info.response);
+              }
+            });
+          }
+        );
+        status = "success";
       });
-    status = "success";
   } catch (error) {
     console.log(error);
     status = "Failure";
