@@ -4,29 +4,24 @@ const { v4: uuidv4 } = require("uuid");
 const Stripe = require("stripe")(
   "sk_test_51KysBGC4c4me30BTVBplfmcTH4bvtHZQiMh1cbwZZ5cgpYIyRhj1QESuxAu6VVD0kIk2Y7CxBVP6tfoUHkc4odBe008u6aKt4e"
 );
+var Request = require("tedious").Request;
+const axios = require("axios");
 var dbcon = require("./connection_config");
 /* GET home page. */
+var connection = require("./config_sqlserver");
 
 var nodemailer = require("nodemailer");
-
 var transporter = nodemailer.createTransport({
   service: "gmail",
   port: 465,
   auth: {
     user: "0938224718nguyen@gmail.com",
-    pass: "0938224718",
+    pass: "mxgkjfzvjapptqgp",
   },
   tls: {
     rejectUnauthorized: false,
   },
 });
-
-router.get("/", function (req, res, next) {
-  res.render("index", { title: "Express" });
-});
-
-// Home
-
 router.get("/getcustomerinfor", (req, res, next) => {
   console.log(req);
 });
@@ -79,6 +74,23 @@ router.post("/home-add", (req, res) => {
     }
   );
 });
+router.post("/home-add ", (req, res) => {
+  dbcon.query(
+    "INSERT INTO cnpm.home(ID_HOME, TEN, DIA_CHI, DIEN_TICH, SO_TANG)  VALUES ('home09', '" +
+      req.body.name +
+      "', '" +
+      req.body.adress +
+      "'," +
+      req.body.dientich +
+      "," +
+      req.body.sotang +
+      " );",
+    function (err, result, filesd) {
+      if (err) throw console.log(err);
+      res.json(result);
+    }
+  );
+});
 router.post("hoadonp/:id", (req, res) => {
   dbcon.query(
     "select  * from cnpm.HOME,cnpm.ROOMTYPE,cnpm.HOA_DON where HOME.ID_HOME=ROOMTYPE.ID_HOME and ROOMTYPE.ID_ROOMTYPE=HOA_DON.ID_ROOMTYPE and PARTNER_ID='" +
@@ -103,6 +115,16 @@ router.post("/home-update/:id", (req, res) => {
       "' where id_home='" +
       req.params.id +
       "'",
+    function (err, result, filesd) {
+      if (err) throw console.log(err);
+      res.json(result);
+    }
+  );
+});
+router.get("/thongke", (req, res) => {
+  let result;
+  dbcon.query(
+    "select * from (select count(*) AS soluonghoadon from cnpm.HOA_DON) sohoadon,(select count(*) soluonguser from (select count(*) as luonguser from cnpm.HOA_DON group by ID_USER) temp) soluonguser,(select sum(TOTAL_PRICE) as doanhthu from cnpm.HOA_DON) doanh",
     function (err, result, filesd) {
       if (err) throw console.log(err);
       res.json(result);
@@ -165,70 +187,35 @@ router.post("/sophong-add", (req, res) => {
     }
   );
 });
+router.get("/id_ramdom", (req, res) => {
+  res.json({ ID: uuidv4() });
+});
+
 router.get("/refund", async (req, res) => {
   let status, error;
+  status = "success";
+  console.log(req.headers.id);
   try {
-    await Stripe.refunds.create({
-      charge: req.headers.id,
-    });
-    status = "success";
-  } catch (error) {
-    console.log(error);
-    status = "Failure";
-  }
-  res.json({ error, status });
-});
-router.post("/payment", async (req, res) => {
-  let status, error;
-  console.log("run");
-  const {
-    token,
-    amount,
-    roomid,
-    datetime,
-    ngaynhan,
-    ngaytra,
-    totalprice,
-    lastprice,
-  } = req.body;
-  console.log(datetime);
-  try {
-    await Stripe.charges
+    await Stripe.refunds
       .create({
-        source: token.id,
-        amount,
-        currency: "usd",
+        charge: req.headers.id,
       })
-      .then((charge) => {
+      .then((data) => {
         dbcon.query(
-          "INSERT INTO cnpm.HOA_DON (ID_HOA_DON,ID_USER ,ID_ROOMTYPE, PAY_TIME, SO_LUONG_PHONG, NGAY_NHAN_PHONG,NGAY_TRA_PHONG ,BOOK_TYPE,  TOTAL_PRICE , FINAL_PRICE,HD_STATUS )VALUES ('" +
-            token.id +
-            "','CUS1','" +
-            roomid +
-            "', '" +
-            datetime +
-            "',1, '" +
-            ngaynhan +
-            "','" +
-            ngaytra +
-            "' ,0," +
-            totalprice +
-            "," +
-            lastprice +
-            ",1);",
+          "update cnpm.HOA_DON set HD_STATUS=0 where ID_HOA_DON='" +
+            req.headers.id +
+            "'",
           function (err, result, filesd) {
             if (err) throw console.log(err);
             var mailOptions = {
               from: "0938224718nguyen@gmail.com",
               to: "01675359367nguyen@gmail.com",
-              subject: "Hóa Đơn Điện Tử",
+              subject:
+                "Thông Báo Hoàn Tiền Hóa Đơn Điện Tử có ID:" + req.headers.id,
               text:
-                "Ngày nhận phòng:+" +
-                ngaynhan +
-                " Ngày trả phòng:" +
-                ngaytra +
-                " Số tiền thanh toán:" +
-                lastprice,
+                "Hôm nay bạn đã hủy hoa đơn có ID đặt phòng là: " +
+                req.headers.id +
+                " Vui lòng kiểm tra lại tài khoản. Nêú có bất cứ thắc mắc vui lòng liên hệ số điện thoại hotline:1900566799. Xin chân thành cám ơn.",
             };
 
             transporter.sendMail(mailOptions, function (error, info) {
@@ -240,12 +227,193 @@ router.post("/payment", async (req, res) => {
             });
           }
         );
-        status = "success";
+        console.log(req.headers.id);
+        dbcon.query(
+          "update cnpm.ROOMTYPE set SO_PHONG_TRONG=SO_PHONG_TRONG-1 where ID_ROOMTYPE='" +
+            req.headers.id_home +
+            "'",
+          function (err, result, filesd) {
+            if (err) throw console.log(err);
+            status = "success";
+          }
+        );
       });
   } catch (error) {
     console.log(error);
     status = "Failure";
   }
+  res.json({ error, status });
+});
+router.post("/paymentweb", async (req, res) => {
+  let status, error;
+  // console.log("run");
+  const { stripeToken, stripeEmail, datetime, totalprice } = req.body;
+  console.log(stripeToken);
+
+  // console.log(datetime);
+  await Stripe.charges
+    .create({
+      source: stripeToken,
+      amount: 10000,
+      currency: "usd",
+    })
+    .then((charge) => {
+      connection.on("connect", function (err) {
+        // If no error, then good to proceed.
+        console.log("Connected");
+        var req = Request(
+          "update USER_SECURITY set Status_Delete=1 where EMAIL='" +
+            stripeEmail +
+            "'",
+          function (err, rowCount) {
+            if (err) {
+              console.log(err);
+            }
+          }
+        );
+        connection.execSql(req);
+      });
+      var mailOptions = {
+        from: "0938224718nguyen@gmail.com",
+        to: "01675359367nguyen@gmail.com",
+        subject: "Hóa Đơn Điện Tử",
+        text: "Thank For Your Pays and now you can download and watching video no ads",
+        html: "",
+      };
+
+      transporter.sendMail(mailOptions, function (error, info) {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log("Email sent: " + info.response);
+        }
+      });
+    });
+
+  res.json({ error, status });
+});
+router.post("/payment", async (req, res) => {
+  let status, error;
+  const headers = {
+    user_id: "140201",
+    partner_id: "580CAE3E-D445-4DC2-B197-50479B2CCA17",
+    app_id: "vy04",
+    "Access-Control-Allow-Origin": "*",
+  };
+  console.log("run");
+  const {
+    token,
+    token_cus,
+    amount,
+    roomid,
+    datetime,
+    ngaynhan,
+    ngaytra,
+    totalprice,
+    lastprice,
+    idvoucher,
+  } = req.body;
+  console.log(datetime);
+  await axios({
+    url: "https://api.votuan.xyz/api/v1/user/voucher/pre-order",
+    method: "post",
+    data: {
+      code: idvoucher,
+      typeVoucher: "APART",
+      transactionId: uuidv4(),
+      amount: lastprice,
+    },
+    headers,
+  }).then((e) => {
+    console.log(e.data.data.orderId);
+    axios({
+      url: "https://api.votuan.xyz/api/v1/user/voucher/state",
+      method: "put",
+      data: {
+        typeVoucher: "APART",
+        orderId: e.data.data.orderId,
+      },
+      headers,
+    });
+  });
+  try {
+    await Stripe.charges
+      .create({
+        source: token.id,
+        amount,
+        currency: "usd",
+      })
+      .then((charge) => {
+        dbcon.query(
+          "INSERT INTO cnpm.HOA_DON (ID_HOA_DON,ID_USER ,ID_ROOMTYPE, PAY_TIME, SO_LUONG_PHONG, NGAY_NHAN_PHONG,NGAY_TRA_PHONG ,BOOK_TYPE,  TOTAL_PRICE , FINAL_PRICE,HD_STATUS )VALUES ('" +
+            charge.id +
+            "','CUS1','" +
+            roomid +
+            "', '" +
+            datetime +
+            "',1, '" +
+            ngaynhan +
+            "','" +
+            ngaytra +
+            "' ,0," +
+            totalprice / 23000 +
+            "," +
+            lastprice / 23000 +
+            ",1);",
+          function (err, result, filesd) {
+            if (err) throw console.log(err);
+            axios({
+              url: "https://gxyvy04g01backend-production.up.railway.app/Customer/insertTransicationAndPP",
+              method: "post",
+              data: {
+                TOKEN: token_cus,
+                END_DATE: ngaynhan,
+                TRANSACTION_VALUE: lastprice,
+                DATE_TRANSACTION: datetime,
+                APP_ID: "APART",
+                PARTNER_ID: "PAR1",
+                INFO_TRANSACTION: "dm hoang",
+              },
+            });
+
+            var mailOptions = {
+              from: "0938224718nguyen@gmail.com",
+              to: "01675359367nguyen@gmail.com",
+              subject: "Hóa Đơn Điện Tử",
+              text:
+                "Ngày nhận phòng:+" +
+                ngaynhan +
+                " Ngày trả phòng:" +
+                ngaytra +
+                " Số tiền thanh toán:" +
+                lastprice,
+              html: "",
+            };
+
+            transporter.sendMail(mailOptions, function (error, info) {
+              if (error) {
+                console.log(error);
+              } else {
+                console.log("Email sent: " + info.response);
+              }
+            });
+          }
+        );
+        dbcon.query(
+          "update cnpm.ROOMTYPE set SO_PHONG_TRONG=SO_PHONG_TRONG+1 where ID_ROOMTYPE='" +
+            roomid +
+            "'",
+          function (err, result, filesd) {
+            if (err) throw console.log(err);
+            status = "success";
+          }
+        );
+      });
+  } catch (error) {
+    console.log(error);
+    status = "Failure";
+  }
+
   res.json({ error, status });
 });
 router.get("/cardholder", async (req, res) => {
@@ -384,34 +552,44 @@ router.delete("/rules/:id", (req, res) => {
 
 //serch
 router.get("/home_create", (req, res) => {
-  console.log(uuidv4().substring(0, 10));
-  res.json({ id: uuidv4().substring(0, 10) });
-  // dbcon.query(
-  //   "INSERT INTO cnpm.HOME  VALUES ('" +
-  //     uuidv4().substring(0, 10) +
-  //     "','DD22','PN2', '" +
-  //     req.headers.name +
-  //     "', " +
-  //     req.headers.area +
-  //     "," +
-  //     req.headers.floor +
-  //     ",'" +
-  //     req.headers.description +
-  //     "', ' req.headers.policy','" +
-  //     req.headers.adress +
-  //     "');",
-  //   function (err, result, filesd) {
-  //     if (err) throw console.log(err);
-  //     res.json({ id: uuidv4().substring(0, 10) });
-  //   }
-  // );
+  const id = uuidv4().substring(0, 10);
+  dbcon.query(
+    "INSERT INTO cnpm.HOME  VALUES ('" +
+      id +
+      "','DD21','PN1', '" +
+      req.headers.name +
+      "', " +
+      req.headers.area +
+      "," +
+      req.headers.floor +
+      ",'" +
+      req.headers.description +
+      "', ' req.headers.policy','" +
+      req.headers.adress +
+      "');",
+    function (err, result, filesd) {
+      if (err) throw console.log(err);
+      dbcon.query(
+        "INSERT INTO cnpm.LINK_HINH(ID_HOME  , LINK  ) VALUES ('" +
+          id +
+          "', '" +
+          req.headers.link +
+          "')",
+        function (err, result, filesd) {
+          if (err) throw console.log(err);
+          res.json({ id: id });
+        }
+      );
+    }
+  );
 });
 router.get("/room_create", (req, res) => {
   console.log(uuidv4().substring(0, 10));
-  console.log(req.headers.id_home);
+  console.log(req.headers);
+  const id = uuidv4().substring(0, 10);
   dbcon.query(
     "insert into cnpm.ROOMTYPE value ('" +
-      uuidv4().substring(0, 10) +
+      id +
       "','" +
       req.headers.id_home +
       "'," +
@@ -431,7 +609,17 @@ router.get("/room_create", (req, res) => {
       ")",
     function (err, result, filesd) {
       if (err) throw console.log(err);
-      res.json({ id: uuidv4().substring(0, 10) });
+      dbcon.query(
+        "INSERT INTO cnpm.LINK_HINH(ID_ROOMTYPE  , LINK  ) VALUES ('" +
+          id +
+          "', '" +
+          req.headers.link +
+          "')",
+        function (err, result, filesd) {
+          if (err) throw console.log(err);
+          res.json({ id: id });
+        }
+      );
     }
   );
 });
@@ -447,7 +635,7 @@ router.get("/search", (req, res) => {
 router.get("/search_home", (req, res) => {
   console.log(req.headers.id);
   const query =
-    "select * from cnpm.HOME,(select ROOMTYPE.ID_HOME , Max(PRICE.PRICE) as oldprice,min(PRICE.PRICE) as finalprice from cnpm.PRICE,cnpm.ROOMTYPE where  PRICE.ID_ROOMTYPE=ROOMTYPE.ID_ROOMTYPE group by ROOMTYPE.ID_HOME) price,(select HOME.ID_HOME,LINK_HINH.LINK from cnpm.HOME,cnpm.LINK_HINH where HOME.ID_HOME=LINK_HINH.ID_HOME) linkhinh ,(select HOME.ID_HOME,sum(SO_PHONG_TRONG) as sophong,sum(SO_NGUOI) as songuoi from cnpm.HOME, cnpm.ROOMTYPE where HOME.ID_HOME=ROOMTYPE.ID_HOME  group by HOME.ID_HOME) soluong where soluong.ID_HOME=HOME.ID_HOME and price.ID_HOME=HOME.ID_HOME and linkhinh.ID_HOME=HOME.ID_HOME and ID_DIA_DIEM='" +
+    "select * from cnpm.HOME,(select ROOMTYPE.ID_HOME , ROOMTYPE.PRICE_PHONG from cnpm.ROOMTYPE group by ROOMTYPE.ID_HOME) price,(select HOME.ID_HOME,LINK_HINH.LINK from cnpm.HOME,cnpm.LINK_HINH where HOME.ID_HOME=LINK_HINH.ID_HOME) linkhinh ,(select HOME.ID_HOME,sum(SO_PHONG_TRONG) as sophong,sum(SO_NGUOI) as songuoi from cnpm.HOME, cnpm.ROOMTYPE where HOME.ID_HOME=ROOMTYPE.ID_HOME  group by HOME.ID_HOME) soluong where soluong.ID_HOME=HOME.ID_HOME and price.ID_HOME=HOME.ID_HOME and linkhinh.ID_HOME=HOME.ID_HOME and ID_DIA_DIEM='" +
     req.headers.id +
     "' and soluong.songuoi*soluong.sophong>" +
     req.headers.songuoi +
@@ -477,7 +665,7 @@ router.get("/detailhome", (req, res) => {
 router.get("/roomtypes", (req, res) => {
   console.log(req.headers.id);
   var queey =
-    "select * from cnpm.ROOMTYPE,cnpm.HOME where HOME.ID_HOME=ROOMTYPE.ID_HOME and HOME.ID_HOME='" +
+    "select * from cnpm.ROOMTYPE,cnpm.HOME,cnpm.LINK_HINH where LINK_HINH.ID_ROOMTYPE=ROOMTYPE.ID_ROOMTYPE and HOME.ID_HOME=ROOMTYPE.ID_HOME and HOME.ID_HOME='" +
     req.headers.id +
     "'";
   dbcon.query(queey, function (err, result, filesd) {
