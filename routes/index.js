@@ -8,7 +8,7 @@ var Request = require("tedious").Request;
 const axios = require("axios");
 var dbcon = require("./connection_config");
 /* GET home page. */
-var connection = require("./config_sqlserver");
+// var connection = require("./config_sqlserver");
 
 var nodemailer = require("nodemailer");
 var transporter = nodemailer.createTransport({
@@ -31,6 +31,34 @@ router.get("/home", (req, res, next) => {
 
   dbcon.query(
     "select * from cnpm.HOME where HOME.PARTNER_ID='" + req.headers.id + "'",
+    function (err, result, filesd) {
+      if (err) throw console.log(err);
+      console.log(result);
+      res.json(result);
+    }
+  );
+});
+router.get("/history", (req, res, next) => {
+  console.log(req.headers.id);
+
+  dbcon.query(
+    "select ID_ROOMTYPE as id,SO_LUONG_PHONG,PAY_TIME,NGAY_NHAN_PHONG,NGAY_TRA_PHONG,FINAL_PRICE from cnpm.HOA_DON where ID_ROOMTYPE='" +
+      req.headers.id +
+      "'",
+    function (err, result, filesd) {
+      if (err) throw console.log(err);
+      console.log(result);
+      res.json(result);
+    }
+  );
+});
+router.get("/thongke2", (req, res, next) => {
+  console.log(req.headers.id);
+
+  dbcon.query(
+    "select concat(month(PAY_TIME),'/',year(PAY_TIME))  as name,sum(FINAL_PRICE) as total from cnpm.HOA_DON where ID_ROOMTYPE='" +
+      req.headers.id +
+      "'group by year(PAY_TIME),month(PAY_TIME) order by year(PAY_TIME),month(PAY_TIME);",
     function (err, result, filesd) {
       if (err) throw console.log(err);
       console.log(result);
@@ -123,13 +151,19 @@ router.post("/home-update/:id", (req, res) => {
 });
 router.get("/thongke", (req, res) => {
   let result;
-  dbcon.query(
-    "select * from (select count(*) AS soluonghoadon from cnpm.HOA_DON) sohoadon,(select count(*) soluonguser from (select count(*) as luonguser from cnpm.HOA_DON group by ID_USER) temp) soluonguser,(select sum(TOTAL_PRICE) as doanhthu from cnpm.HOA_DON) doanh",
-    function (err, result, filesd) {
-      if (err) throw console.log(err);
-      res.json(result);
-    }
-  );
+  const a =
+    "select * from (select count(*) AS soluonghoadon from cnpm.HOA_DON where MA_DAT_CHO='" +
+    req.headers.id +
+    "' ) sohoadon,(select count(*) soluonguser from (select count(*) as luonguser from cnpm.HOA_DON  where MA_DAT_CHO='" +
+    req.headers.id +
+    "' group by ID_USER) temp) soluonguser,(select sum(TOTAL_PRICE) as doanhthu from cnpm.HOA_DON where MA_DAT_CHO='" +
+    req.headers.id +
+    "') doanh";
+  console.log(a);
+  dbcon.query(a, function (err, result, filesd) {
+    if (err) throw console.log(err);
+    res.json(result);
+  });
 });
 router.delete("/home/:id", (req, res) => {
   console.log("update cnpm.home where id_home='" + req.params.id + "'");
@@ -155,8 +189,11 @@ router.get("/sophong/:id", (req, res) => {
   );
 });
 router.get("/hoadon", (req, res) => {
+  console.log(req.headers.id);
   dbcon.query(
-    "SELECT * FROM cnpm.HOA_DON where ID_USER='CUS1' And HD_STATUS=1 ",
+    "SELECT * FROM cnpm.HOA_DON where ID_USER='" +
+      req.headers.id +
+      "' And HD_STATUS=1 ",
     function (err, result, filesd) {
       if (err) throw console.log(err);
       res.json(result);
@@ -244,62 +281,57 @@ router.get("/refund", async (req, res) => {
   }
   res.json({ error, status });
 });
-router.post("/paymentweb", async (req, res) => {
-  let status, error;
-  // console.log("run");
-  const { stripeToken, stripeEmail, datetime, totalprice } = req.body;
-  console.log(stripeToken);
+// router.post("/paymentweb", async (req, res) => {
+//   let status, error;
+//   // console.log("run");
+//   const { stripeToken, stripeEmail, datetime, totalprice } = req.body;
+//   console.log(stripeToken);
 
-  // console.log(datetime);
-  await Stripe.charges
-    .create({
-      source: stripeToken,
-      amount: 10000,
-      currency: "usd",
-    })
-    .then((charge) => {
-      connection.on("connect", function (err) {
-        // If no error, then good to proceed.
-        console.log("Connected");
-        var req = Request(
-          "update USER_SECURITY set Status_Delete=1 where EMAIL='" +
-            stripeEmail +
-            "'",
-          function (err, rowCount) {
-            if (err) {
-              console.log(err);
-            }
-          }
-        );
-        connection.execSql(req);
-      });
-      var mailOptions = {
-        from: "0938224718nguyen@gmail.com",
-        to: "01675359367nguyen@gmail.com",
-        subject: "Hóa Đơn Điện Tử",
-        text: "Thank For Your Pays and now you can download and watching video no ads",
-        html: "",
-      };
+//   // console.log(datetime);
+//   await Stripe.charges
+//     .create({
+//       source: stripeToken,
+//       amount: 10000,
+//       currency: "usd",
+//     })
+//     .then((charge) => {
+//       connection.on("connect", function (err) {
+//         // If no error, then good to proceed.
+//         console.log("Connected");
+//         var req = Request(
+//           "update USER_SECURITY set Status_Delete=1 where EMAIL='" +
+//             stripeEmail +
+//             "'",
+//           function (err, rowCount) {
+//             if (err) {
+//               console.log(err);
+//             }
+//           }
+//         );
+//         connection.execSql(req);
+//       });
+//       var mailOptions = {
+//         from: "0938224718nguyen@gmail.com",
+//         to: "01675359367nguyen@gmail.com",
+//         subject: "Hóa Đơn Điện Tử",
+//         text: "Thank For Your Pays and now you can download and watch video no ads",
+//         html: "",
+//       };
 
-      transporter.sendMail(mailOptions, function (error, info) {
-        if (error) {
-          console.log(error);
-        } else {
-          console.log("Email sent: " + info.response);
-        }
-      });
-    });
+//       transporter.sendMail(mailOptions, function (error, info) {
+//         if (error) {
+//           console.log(error);
+//         } else {
+//           console.log("Email sent: " + info.response);
+//         }
+//       });
+//     });
 
-  res.json({ error, status });
-});
+//   res.json({ error, status });
+// });
 router.post("/payment", async (req, res) => {
   let status, error;
-  const headers = {
-    user_id: "140201",
-    partner_id: "580CAE3E-D445-4DC2-B197-50479B2CCA17",
-    app_id: "vy04",
-    "Access-Control-Allow-Origin": "*",
-  };
+
   console.log("run");
   const {
     token,
@@ -308,34 +340,72 @@ router.post("/payment", async (req, res) => {
     roomid,
     datetime,
     ngaynhan,
+    iduser,
     ngaytra,
+    idpar,
     totalprice,
     lastprice,
     idvoucher,
+    idgiff,
   } = req.body;
+  console.log("IUD" + idpar);
   console.log(datetime);
-  await axios({
-    url: "https://api.votuan.xyz/api/v1/user/voucher/pre-order",
-    method: "post",
-    data: {
-      code: idvoucher,
-      typeVoucher: "APART",
-      transactionId: uuidv4(),
-      amount: lastprice,
-    },
-    headers,
-  }).then((e) => {
-    console.log(e.data.data.orderId);
-    axios({
-      url: "https://api.votuan.xyz/api/v1/user/voucher/state",
-      method: "put",
+  const headers = {
+    user_id: iduser,
+    partner_id: "580CAE3E-D445-4DC2-B197-50479B2CCA17",
+    app_id: "vy04",
+    "Access-Control-Allow-Origin": "*",
+  };
+  console.log(idgiff);
+  if (idvoucher != "") {
+    await axios({
+      url: "https://api.votuan.xyz/api/v1/user/voucher/pre-order",
+      method: "post",
       data: {
+        code: idvoucher,
         typeVoucher: "APART",
-        orderId: e.data.data.orderId,
+        transactionId: uuidv4(),
+        amount: lastprice,
       },
       headers,
+    }).then((e) => {
+      console.log(e.data.data.orderId);
+      axios({
+        url: "https://api.votuan.xyz/api/v1/user/voucher/state",
+        method: "put",
+        data: {
+          typeVoucher: "APART",
+          orderId: e.data.data.orderId,
+        },
+        headers,
+      });
     });
-  });
+  }
+  if (idgiff != "") {
+    await axios({
+      url: "https://api.votuan.xyz/api/v1/user/gift-card/pre-order",
+      method: "post",
+      data: {
+        code: idgiff,
+        typeVoucher: "APART",
+        transactionId: uuidv4(),
+        amount: lastprice,
+      },
+      headers,
+    }).then((e) => {
+      console.log(e.data.data.orderId);
+      axios({
+        url: "https://api.votuan.xyz/api/v1/user/gift-card/state",
+        method: "put",
+        data: {
+          typeVoucher: "APART",
+          orderId: e.data.data.orderId,
+        },
+        headers,
+      });
+    });
+  }
+
   try {
     await Stripe.charges
       .create({
@@ -345,9 +415,13 @@ router.post("/payment", async (req, res) => {
       })
       .then((charge) => {
         dbcon.query(
-          "INSERT INTO cnpm.HOA_DON (ID_HOA_DON,ID_USER ,ID_ROOMTYPE, PAY_TIME, SO_LUONG_PHONG, NGAY_NHAN_PHONG,NGAY_TRA_PHONG ,BOOK_TYPE,  TOTAL_PRICE , FINAL_PRICE,HD_STATUS )VALUES ('" +
+          "INSERT INTO cnpm.HOA_DON (ID_HOA_DON,ID_USER,MA_DAT_CHO,ID_ROOMTYPE, PAY_TIME, SO_LUONG_PHONG, NGAY_NHAN_PHONG,NGAY_TRA_PHONG ,BOOK_TYPE,  TOTAL_PRICE , FINAL_PRICE,HD_STATUS )VALUES ('" +
             charge.id +
-            "','CUS1','" +
+            "','" +
+            iduser +
+            "','" +
+            idpar +
+            "','" +
             roomid +
             "', '" +
             datetime +
@@ -356,25 +430,25 @@ router.post("/payment", async (req, res) => {
             "','" +
             ngaytra +
             "' ,0," +
-            totalprice / 23000 +
+            totalprice +
             "," +
-            lastprice / 23000 +
+            lastprice +
             ",1);",
           function (err, result, filesd) {
             if (err) throw console.log(err);
-            axios({
-              url: "https://gxyvy04g01backend-production.up.railway.app/Customer/insertTransicationAndPP",
-              method: "post",
-              data: {
-                TOKEN: token_cus,
-                END_DATE: ngaynhan,
-                TRANSACTION_VALUE: lastprice,
-                DATE_TRANSACTION: datetime,
-                APP_ID: "APART",
-                PARTNER_ID: "PAR1",
-                INFO_TRANSACTION: "dm hoang",
-              },
-            });
+            // axios({
+            //   url: "https://gxyvy04g01backend-production.up.railway.app/Customer/insertTransicationAndPP",
+            //   method: "post",
+            //   data: {
+            //     TOKEN: token_cus,
+            //     END_DATE: ngaynhan,
+            //     TRANSACTION_VALUE: lastprice,
+            //     DATE_TRANSACTION: datetime,
+            //     APP_ID: "APART",
+            //     PARTNER_ID: "PAR1",
+            //     INFO_TRANSACTION: "dm hoang",
+            //   },
+            // });
 
             var mailOptions = {
               from: "0938224718nguyen@gmail.com",
@@ -556,7 +630,9 @@ router.get("/home_create", (req, res) => {
   dbcon.query(
     "INSERT INTO cnpm.HOME  VALUES ('" +
       id +
-      "','DD21','PN1', '" +
+      "','DD21','" +
+      req.headers.id +
+      "', '" +
       req.headers.name +
       "', " +
       req.headers.area +

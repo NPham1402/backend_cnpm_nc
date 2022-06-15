@@ -16,5 +16,4 @@ var config = {
 };
 var connection = new Connection(config);
 connection.connect();
-
 module.exports = connection;
